@@ -23,7 +23,7 @@
 /missing
 /test-driver
 
-# automake
+# automake generated files
 /Makefile.in
 /src/Makefile.in
 /src/client/Makefile.in
@@ -34,6 +34,28 @@
 /tests/Makefile.in
 /osx/Makefile.in
 /ar-lib
+
+# configure generated files
+/Makefile
+/stamp-h1
+/config.h
+/config.log
+/config.status
+/libtool
+/src/Makefile
+/src/client/Makefile
+/src/client/lldpcli
+/src/client/lldpcli.8
+/src/compat/Makefile
+/src/daemon/Makefile
+/src/lib/Makefile
+/src/lib/atom-glue.c
+/src/lib/lldpctl.pc
+/tests/Makefile
+/osx/Makefile
+/**/.deps/
+/**/.libs/
+/**/.dirstamp
 
 # cscope
 /cscope.*
