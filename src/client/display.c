@@ -1079,6 +1079,37 @@ display_configuration(lldpctl_conn_t *conn, struct writer *w)
 	tag_datatag(w, "lldp-agent-type", "Agent type",
 	    lldpctl_atom_get_str(configuration, lldpctl_k_config_lldp_agent_type));
 
+	/* BGP peer discovery configuration */
+	{
+		const char *bgp_rid = lldpctl_atom_get_str(configuration,
+		    lldpctl_k_config_bgp_router_id);
+		long int bgp_as =
+		    lldpctl_atom_get_int(configuration, lldpctl_k_config_bgp_as);
+		const char *bgp_addr = lldpctl_atom_get_str(configuration,
+		    lldpctl_k_config_bgp_peering_addr);
+		const char *bgp_afi_safi = lldpctl_atom_get_str(configuration,
+		    lldpctl_k_config_bgp_afi_safi);
+		char as_buf[32];
+		if ((bgp_rid && bgp_rid[0]) || bgp_as > 0 ||
+		    (bgp_addr && bgp_addr[0])) {
+			tag_start(w, "bgp-config", "BGP peer discovery config");
+			if (bgp_rid && bgp_rid[0])
+				tag_datatag(w, "router-id", "BGP Router ID",
+				    bgp_rid);
+			if (bgp_as > 0) {
+				snprintf(as_buf, sizeof(as_buf), "%ld", bgp_as);
+				tag_datatag(w, "as", "AS Number", as_buf);
+			}
+			if (bgp_addr && bgp_addr[0])
+				tag_datatag(w, "peering-addr", "Peering Address",
+				    bgp_addr);
+			if (bgp_afi_safi && bgp_afi_safi[0])
+				tag_datatag(w, "afi-safi", "AFI/SAFI",
+				    bgp_afi_safi);
+			tag_end(w);
+		}
+	}
+
 	tag_end(w);
 	tag_end(w);
 

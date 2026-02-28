@@ -24,6 +24,50 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <string.h>
+
+/* AFI/SAFI lookup table for BGP peer discovery TLV */
+struct bgp_afi_safi_entry {
+	u_int16_t afi;
+	u_int8_t safi;
+	const char *name;
+};
+
+static const struct bgp_afi_safi_entry bgp_afi_safi_map[] = {
+	{ 1, 1, "ipv4-unicast" },
+	{ 2, 1, "ipv6-unicast" },
+	{ 1, 2, "ipv4-multicast" },
+	{ 2, 2, "ipv6-multicast" },
+	{ 1, 128, "ipv4-vpn" },
+	{ 2, 128, "ipv6-vpn" },
+	{ 25, 70, "l2vpn-evpn" },
+	{ 1, 4, "ipv4-labeled" },
+	{ 2, 4, "ipv6-labeled" },
+	{ 0, 0, NULL },
+};
+
+static const char *
+lldp_bgp_afi_safi_name(u_int16_t afi, u_int8_t safi)
+{
+	const struct bgp_afi_safi_entry *e;
+	for (e = bgp_afi_safi_map; e->name; e++)
+		if (e->afi == afi && e->safi == safi) return e->name;
+	return NULL;
+}
+
+static int
+lldp_bgp_afi_safi_lookup(const char *name, u_int16_t *afi, u_int8_t *safi)
+{
+	const struct bgp_afi_safi_entry *e;
+	for (e = bgp_afi_safi_map; e->name; e++)
+		if (!strcmp(e->name, name)) {
+			*afi = e->afi;
+			*safi = e->safi;
+			return 1;
+		}
+	return 0;
+}
 
 static int
 lldpd_af_to_lldp_proto(int af)
@@ -466,15 +510,23 @@ _lldp_send(struct lldpd *global, struct lldpd_hardware *hardware, u_int8_t c_id_
 			af = 2;
 			addr_bytes = &addr6;
 			addr_len = 16;
-		} else
+		} else {
+			log_warnx("lldp", "invalid BGP peering address '%s', "
+			    "skipping BGP TLV",
+			    global->g_config.c_bgp_peering_addr);
 			goto end;
+		}
 
 		if (global->g_config.c_bgp_afi_safi) {
 			char *tmp = strdup(global->g_config.c_bgp_afi_safi);
 			if (tmp) {
 				char *tok = strtok(tmp, ",");
 				while (tok) {
-					pair_count++;
+					u_int16_t a;
+					u_int8_t s;
+					if (lldp_bgp_afi_safi_lookup(tok, &a,
+						&s))
+						pair_count++;
 					tok = strtok(NULL, ",");
 				}
 				free(tmp);
@@ -521,50 +573,15 @@ _lldp_send(struct lldpd *global, struct lldpd_hardware *hardware, u_int8_t c_id_
 					char *tok = strtok(tmp, ",");
 					int ok = 1;
 					while (tok && ok) {
-						u_int16_t afi = 0;
-						u_int8_t safi = 0;
-						if (!strcmp(tok, "ipv4-unicast")) {
-							afi = 1;
-							safi = 1;
-						} else if (!strcmp(tok,
-							       "ipv6-unicast")) {
-							afi = 2;
-							safi = 1;
-						} else if (!strcmp(tok,
-							       "ipv4-multicast")) {
-							afi = 1;
-							safi = 2;
-						} else if (!strcmp(tok,
-							       "ipv6-multicast")) {
-							afi = 2;
-							safi = 2;
-						} else if (!strcmp(tok,
-							       "ipv4-vpn")) {
-							afi = 1;
-							safi = 128;
-						} else if (!strcmp(tok,
-							       "ipv6-vpn")) {
-							afi = 2;
-							safi = 128;
-						} else if (!strcmp(tok,
-							       "l2vpn-evpn")) {
-							afi = 25;
-							safi = 70;
-						} else if (!strcmp(tok,
-							       "ipv4-labeled")) {
-							afi = 1;
-							safi = 4;
-						} else if (!strcmp(tok,
-							       "ipv6-labeled")) {
-							afi = 2;
-							safi = 4;
-						}
-						if (afi != 0) {
-							if (!(POKE_UINT16(afi) &&
+						u_int16_t afi_n = 0;
+						u_int8_t safi_n = 0;
+						if (lldp_bgp_afi_safi_lookup(
+							tok, &afi_n, &safi_n)) {
+							if (!(POKE_UINT16(
+								  afi_n) &&
 								POKE_UINT8(
-								    safi))) {
+								    safi_n)))
 								ok = 0;
-							}
 						}
 						tok = strtok(NULL, ",");
 					}
@@ -680,21 +697,6 @@ lldp_send(struct lldpd *global, struct lldpd_hardware *hardware)
 		memcpy(hardware->h_lport_previous_id, port->p_id, port->p_id_len);
 
 	return 0;
-}
-
-static const char *
-lldp_bgp_afi_safi_name(u_int16_t afi, u_int8_t safi)
-{
-	if (afi == 1 && safi == 1) return "ipv4-unicast";
-	if (afi == 2 && safi == 1) return "ipv6-unicast";
-	if (afi == 1 && safi == 2) return "ipv4-multicast";
-	if (afi == 2 && safi == 2) return "ipv6-multicast";
-	if (afi == 1 && safi == 128) return "ipv4-vpn";
-	if (afi == 2 && safi == 128) return "ipv6-vpn";
-	if (afi == 25 && safi == 70) return "l2vpn-evpn";
-	if (afi == 1 && safi == 4) return "ipv4-labeled";
-	if (afi == 2 && safi == 4) return "ipv6-labeled";
-	return NULL;
 }
 
 #define CHECK_TLV_SIZE(x, name)                                                    \
@@ -1446,6 +1448,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 									acons++;
 									char as[256] =
 									    "";
+									size_t aslen = 0;
 									int i;
 									for (i = 0;
 									     i < pc &&
@@ -1462,19 +1465,14 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 											afi,
 											safi);
 										if (nm) {
-											if (as[0])
-												strncat(
-												    as,
-												    ",",
-												    sizeof(as) -
-													strlen(as) -
-													1);
-											strncat(
-											    as,
-											    nm,
-											    sizeof(as) -
-												strlen(as) -
-												1);
+											if (aslen > 0 && aslen + 1 < sizeof(as))
+												as[aslen++] = ',';
+											size_t nmlen = strlen(nm);
+											if (aslen + nmlen < sizeof(as)) {
+												memcpy(as + aslen, nm, nmlen);
+												aslen += nmlen;
+												as[aslen] = '\0';
+											}
 										}
 									}
 									if (as[0]) {
@@ -1503,6 +1501,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 									acons++;
 									char as[256] =
 									    "";
+									size_t aslen = 0;
 									int i;
 									for (i = 0;
 									     i < pc &&
@@ -1519,19 +1518,14 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 											afi,
 											safi);
 										if (nm) {
-											if (as[0])
-												strncat(
-												    as,
-												    ",",
-												    sizeof(as) -
-													strlen(as) -
-													1);
-											strncat(
-											    as,
-											    nm,
-											    sizeof(as) -
-												strlen(as) -
-												1);
+											if (aslen > 0 && aslen + 1 < sizeof(as))
+												as[aslen++] = ',';
+											size_t nmlen = strlen(nm);
+											if (aslen + nmlen < sizeof(as)) {
+												memcpy(as + aslen, nm, nmlen);
+												aslen += nmlen;
+												as[aslen] = '\0';
+											}
 										}
 									}
 									if (as[0]) {
@@ -1541,7 +1535,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 									}
 								}
 							} else
-								acons = 0;
+								acons = 1;
 							PEEK_DISCARD(st_len -
 							    acons);
 						} else

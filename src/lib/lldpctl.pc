@@ -1,0 +1,6 @@
+Name: lldpctl
+Description: Library to interface with lldpd, a 802.1AB daemon
+Version: a3bfd10-dirty
+URL: https://lldpd.github.io/
+Libs: -L/usr/lib -llldpctl
+Cflags: -I/usr/include
