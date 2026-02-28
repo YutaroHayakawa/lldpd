@@ -80,4 +80,14 @@
 #define LLDP_TLV_MED_IV_MODEL 10
 #define LLDP_TLV_MED_IV_ASSET 11
 
+#define LLDP_TLV_ORG_BGP \
+  {                      \
+    0x00, 0x00, 0x5e     \
+  }
+#define LLDP_TLV_BGP_PEER 16
+
+#define LLDP_BGP_SUBTLV_ROUTER_ID    1
+#define LLDP_BGP_SUBTLV_AS_NUMBER    2
+#define LLDP_BGP_SUBTLV_PEERING_ADDR 3
+
 #endif

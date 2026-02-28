@@ -935,6 +935,16 @@ typedef enum {
 						 (up to 507 bytes) */
 	lldpctl_k_custom_tlv_op,	      /**< `(S,W)` custom TLV operation */
 
+	lldpctl_k_config_bgp_router_id = 6000, /**< `(S,WON)` BGP Router ID */
+	lldpctl_k_config_bgp_as,               /**< `(I,WO)` BGP AS number */
+	lldpctl_k_config_bgp_peering_addr,     /**< `(S,WON)` BGP peering address */
+	lldpctl_k_config_bgp_afi_safi,         /**< `(S,WON)` BGP AFI/SAFI pairs */
+
+	lldpctl_k_port_bgp_router_id = 6100,   /**< `(S)` BGP Router ID from neighbor */
+	lldpctl_k_port_bgp_as,                 /**< `(I)` BGP AS number from neighbor */
+	lldpctl_k_port_bgp_peering_addr,       /**< `(S)` BGP peering address from neighbor */
+	lldpctl_k_port_bgp_afi_safi,           /**< `(S)` BGP AFI/SAFI from neighbor */
+
 } lldpctl_key_t;
 
 /**

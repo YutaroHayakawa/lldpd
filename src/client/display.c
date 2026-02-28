@@ -768,6 +768,40 @@ display_interface(lldpctl_conn_t *conn, struct writer *w, int hidden,
 
 	display_custom_tlvs(w, port);
 
+	/* BGP Peer Discovery TLV */
+	{
+		const char *bgp_rid =
+		    lldpctl_atom_get_str(port, lldpctl_k_port_bgp_router_id);
+		const char *bgp_addr =
+		    lldpctl_atom_get_str(port, lldpctl_k_port_bgp_peering_addr);
+		const char *bgp_as_str = NULL;
+		long int bgp_as =
+		    lldpctl_atom_get_int(port, lldpctl_k_port_bgp_as);
+		const char *bgp_afi_safi =
+		    lldpctl_atom_get_str(port, lldpctl_k_port_bgp_afi_safi);
+		char as_buf[32];
+
+		if ((bgp_rid && bgp_rid[0]) || (bgp_addr && bgp_addr[0]) ||
+		    bgp_as > 0) {
+			tag_start(w, "bgp", "BGP Peer Discovery");
+			if (bgp_rid && bgp_rid[0])
+				tag_datatag(w, "router-id", "BGP Router ID",
+				    bgp_rid);
+			if (bgp_as > 0) {
+				snprintf(as_buf, sizeof(as_buf), "%ld", bgp_as);
+				bgp_as_str = as_buf;
+				tag_datatag(w, "as", "AS Number", bgp_as_str);
+			}
+			if (bgp_addr && bgp_addr[0])
+				tag_datatag(w, "peering-addr",
+				    "Peering Address", bgp_addr);
+			if (bgp_afi_safi && bgp_afi_safi[0])
+				tag_datatag(w, "afi-safi", "AFI/SAFI",
+				    bgp_afi_safi);
+			tag_end(w);
+		}
+	}
+
 	tag_end(w);
 }
 

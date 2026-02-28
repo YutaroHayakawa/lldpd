@@ -753,6 +753,83 @@ cmd_store_status_env_value(struct lldpctl_conn_t *conn, struct writer *w,
 	return cmd_store_something_env_value("status", env, value);
 }
 
+static int
+cmd_bgp_peering_addr(struct lldpctl_conn_t *conn, struct writer *w,
+    struct cmd_env *env, const void *arg)
+{
+	lldpctl_atom_t *config = lldpctl_get_configuration(conn);
+	if (config == NULL) {
+		log_warnx("lldpctl", "unable to get configuration from lldpd. %s",
+		    lldpctl_last_strerror(conn));
+		return 0;
+	}
+	const char *addr = cmdenv_get(env, "bgp-peering-addr");
+	const char *afisafi = cmdenv_get(env, "bgp-afi-safi");
+	if (lldpctl_atom_set_str(config, lldpctl_k_config_bgp_peering_addr,
+		addr) == NULL) {
+		log_warnx("lldpctl",
+		    "unable to set BGP peering address. %s",
+		    lldpctl_last_strerror(conn));
+		lldpctl_atom_dec_ref(config);
+		return 0;
+	}
+	if (afisafi &&
+	    lldpctl_atom_set_str(config, lldpctl_k_config_bgp_afi_safi,
+		afisafi) == NULL) {
+		log_warnx("lldpctl", "unable to set BGP AFI/SAFI. %s",
+		    lldpctl_last_strerror(conn));
+		lldpctl_atom_dec_ref(config);
+		return 0;
+	}
+	log_info("lldpctl", "BGP peering address configured");
+	lldpctl_atom_dec_ref(config);
+	return 1;
+}
+
+static int
+cmd_bgp_router_id(struct lldpctl_conn_t *conn, struct writer *w,
+    struct cmd_env *env, const void *arg)
+{
+	lldpctl_atom_t *config = lldpctl_get_configuration(conn);
+	if (config == NULL) {
+		log_warnx("lldpctl", "unable to get configuration from lldpd. %s",
+		    lldpctl_last_strerror(conn));
+		return 0;
+	}
+	if (lldpctl_atom_set_str(config, lldpctl_k_config_bgp_router_id,
+		cmdenv_get(env, "bgp-router-id")) == NULL) {
+		log_warnx("lldpctl", "unable to set BGP router ID. %s",
+		    lldpctl_last_strerror(conn));
+		lldpctl_atom_dec_ref(config);
+		return 0;
+	}
+	log_info("lldpctl", "BGP router ID configured");
+	lldpctl_atom_dec_ref(config);
+	return 1;
+}
+
+static int
+cmd_bgp_as(struct lldpctl_conn_t *conn, struct writer *w, struct cmd_env *env,
+    const void *arg)
+{
+	lldpctl_atom_t *config = lldpctl_get_configuration(conn);
+	if (config == NULL) {
+		log_warnx("lldpctl", "unable to get configuration from lldpd. %s",
+		    lldpctl_last_strerror(conn));
+		return 0;
+	}
+	if (lldpctl_atom_set_str(config, lldpctl_k_config_bgp_as,
+		cmdenv_get(env, "bgp-as")) == NULL) {
+		log_warnx("lldpctl", "unable to set BGP AS number. %s",
+		    lldpctl_last_strerror(conn));
+		lldpctl_atom_dec_ref(config);
+		return 0;
+	}
+	log_info("lldpctl", "BGP AS number configured");
+	lldpctl_atom_dec_ref(config);
+	return 1;
+}
+
 /**
  * Register `configure lldp` commands.
  *
@@ -941,4 +1018,37 @@ register_commands_configure_lldp(struct cmd_node *configure,
 #ifdef ENABLE_CUSTOM
 	register_commands_configure_lldp_custom_tlvs(configure_lldp, unconfigure_lldp);
 #endif
+
+	/* BGP peer discovery configuration */
+	struct cmd_node *configure_lldp_bgp =
+	    commands_new(configure_lldp, "bgp-config",
+		"BGP peer discovery configuration", NULL, NULL, NULL);
+
+	struct cmd_node *bgp_peering =
+	    commands_new(commands_new(configure_lldp_bgp, "peering-address",
+			     "Set BGP peering address", NULL, NULL, NULL),
+		NULL, "BGP peering address (IPv4 or IPv6)", NULL,
+		cmd_store_env_value, "bgp-peering-addr");
+	struct cmd_node *bgp_peering_afisafi =
+	    commands_new(commands_new(bgp_peering, "afi-safi",
+			     "Set BGP AFI/SAFI list", NULL, NULL, NULL),
+		NULL, "Comma-separated AFI/SAFI list (e.g. ipv4-unicast,ipv6-unicast)",
+		NULL, cmd_store_env_value, "bgp-afi-safi");
+	commands_new(bgp_peering, NEWLINE, "Set BGP peering address", NULL,
+	    cmd_bgp_peering_addr, NULL);
+	commands_new(bgp_peering_afisafi, NEWLINE,
+	    "Set BGP peering address with AFI/SAFI", NULL,
+	    cmd_bgp_peering_addr, NULL);
+
+	commands_new(commands_new(commands_new(configure_lldp_bgp, "router-id",
+				      "Set BGP Router ID", NULL, NULL, NULL),
+			 NULL, "BGP Router ID (IPv4 address)", NULL,
+			 cmd_store_env_value, "bgp-router-id"),
+	    NEWLINE, "Set BGP Router ID", NULL, cmd_bgp_router_id, NULL);
+
+	commands_new(commands_new(commands_new(configure_lldp_bgp, "as-number",
+				      "Set BGP AS number", NULL, NULL, NULL),
+			 NULL, "BGP AS number", NULL, cmd_store_env_value,
+			 "bgp-as"),
+	    NEWLINE, "Set BGP AS number", NULL, cmd_bgp_as, NULL);
 }

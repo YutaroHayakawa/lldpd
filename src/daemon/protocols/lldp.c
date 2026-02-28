@@ -85,6 +85,7 @@ _lldp_send(struct lldpd *global, struct lldpd_hardware *hardware, u_int8_t c_id_
 #ifdef ENABLE_CUSTOM
 	struct lldpd_custom *custom;
 #endif
+	const u_int8_t bgpoui[] = LLDP_TLV_ORG_BGP;
 	port = &hardware->h_lport;
 	chassis = port->p_chassis;
 	length = hardware->h_mtu;
@@ -446,6 +447,136 @@ _lldp_send(struct lldpd *global, struct lldpd_hardware *hardware, u_int8_t c_id_
 	}
 #endif
 
+	/* BGP Peer Discovery TLV (draft-acee-idr-lldp-peer-discovery) */
+	if (global->g_config.c_bgp_peering_addr) {
+		struct in_addr addr4;
+		struct in6_addr addr6;
+		u_int8_t af;
+		const void *addr_bytes;
+		int addr_len;
+		int pair_count = 0;
+
+		if (inet_pton(AF_INET, global->g_config.c_bgp_peering_addr,
+			&addr4) == 1) {
+			af = 1;
+			addr_bytes = &addr4;
+			addr_len = 4;
+		} else if (inet_pton(AF_INET6, global->g_config.c_bgp_peering_addr,
+			       &addr6) == 1) {
+			af = 2;
+			addr_bytes = &addr6;
+			addr_len = 16;
+		} else
+			goto end;
+
+		if (global->g_config.c_bgp_afi_safi) {
+			char *tmp = strdup(global->g_config.c_bgp_afi_safi);
+			if (tmp) {
+				char *tok = strtok(tmp, ",");
+				while (tok) {
+					pair_count++;
+					tok = strtok(NULL, ",");
+				}
+				free(tmp);
+			}
+		}
+
+		if (!(POKE_START_LLDP_TLV(LLDP_TLV_ORG) &&
+			POKE_BYTES(bgpoui, sizeof(bgpoui)) &&
+			POKE_UINT8(LLDP_TLV_BGP_PEER)))
+			goto toobig;
+
+		if (global->g_config.c_bgp_router_id) {
+			struct in_addr rid;
+			if (inet_pton(AF_INET, global->g_config.c_bgp_router_id,
+				&rid) == 1) {
+				if (!(POKE_UINT8(LLDP_BGP_SUBTLV_ROUTER_ID) &&
+					POKE_UINT8(4) &&
+					POKE_BYTES(&rid, 4)))
+					goto toobig;
+			}
+		}
+
+		if (global->g_config.c_bgp_as != 0) {
+			if (!(POKE_UINT8(LLDP_BGP_SUBTLV_AS_NUMBER) &&
+				POKE_UINT8(4) &&
+				POKE_UINT32(global->g_config.c_bgp_as)))
+				goto toobig;
+		}
+
+		{
+			u_int8_t subtlv_len =
+			    (u_int8_t)(1 + addr_len + 1 + pair_count * 3);
+			if (!(POKE_UINT8(LLDP_BGP_SUBTLV_PEERING_ADDR) &&
+				POKE_UINT8(subtlv_len) &&
+				POKE_UINT8(af) &&
+				POKE_BYTES(addr_bytes, addr_len) &&
+				POKE_UINT8((u_int8_t)pair_count)))
+				goto toobig;
+
+			if (global->g_config.c_bgp_afi_safi && pair_count > 0) {
+				char *tmp =
+				    strdup(global->g_config.c_bgp_afi_safi);
+				if (tmp) {
+					char *tok = strtok(tmp, ",");
+					int ok = 1;
+					while (tok && ok) {
+						u_int16_t afi = 0;
+						u_int8_t safi = 0;
+						if (!strcmp(tok, "ipv4-unicast")) {
+							afi = 1;
+							safi = 1;
+						} else if (!strcmp(tok,
+							       "ipv6-unicast")) {
+							afi = 2;
+							safi = 1;
+						} else if (!strcmp(tok,
+							       "ipv4-multicast")) {
+							afi = 1;
+							safi = 2;
+						} else if (!strcmp(tok,
+							       "ipv6-multicast")) {
+							afi = 2;
+							safi = 2;
+						} else if (!strcmp(tok,
+							       "ipv4-vpn")) {
+							afi = 1;
+							safi = 128;
+						} else if (!strcmp(tok,
+							       "ipv6-vpn")) {
+							afi = 2;
+							safi = 128;
+						} else if (!strcmp(tok,
+							       "l2vpn-evpn")) {
+							afi = 25;
+							safi = 70;
+						} else if (!strcmp(tok,
+							       "ipv4-labeled")) {
+							afi = 1;
+							safi = 4;
+						} else if (!strcmp(tok,
+							       "ipv6-labeled")) {
+							afi = 2;
+							safi = 4;
+						}
+						if (afi != 0) {
+							if (!(POKE_UINT16(afi) &&
+								POKE_UINT8(
+								    safi))) {
+								ok = 0;
+							}
+						}
+						tok = strtok(NULL, ",");
+					}
+					free(tmp);
+					if (!ok) goto toobig;
+				}
+			}
+		}
+
+		if (!(POKE_END_LLDP_TLV)) goto toobig;
+	}
+
 end:
 	/* END */
 	if (!(POKE_START_LLDP_TLV(LLDP_TLV_END) && POKE_END_LLDP_TLV)) goto toobig;
@@ -551,6 +682,21 @@ lldp_send(struct lldpd *global, struct lldpd_hardware *hardware)
 	return 0;
 }
 
+static const char *
+lldp_bgp_afi_safi_name(u_int16_t afi, u_int8_t safi)
+{
+	if (afi == 1 && safi == 1) return "ipv4-unicast";
+	if (afi == 2 && safi == 1) return "ipv6-unicast";
+	if (afi == 1 && safi == 2) return "ipv4-multicast";
+	if (afi == 2 && safi == 2) return "ipv6-multicast";
+	if (afi == 1 && safi == 128) return "ipv4-vpn";
+	if (afi == 2 && safi == 128) return "ipv6-vpn";
+	if (afi == 25 && safi == 70) return "l2vpn-evpn";
+	if (afi == 1 && safi == 4) return "ipv4-labeled";
+	if (afi == 2 && safi == 4) return "ipv6-labeled";
+	return NULL;
+}
+
 #define CHECK_TLV_SIZE(x, name)                                                    \
   do {                                                                             \
     if (tlv_size < (x)) {                                                          \
@@ -577,6 +723,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 	const char dot3[] = LLDP_TLV_ORG_DOT3;
 	const char med[] = LLDP_TLV_ORG_MED;
 	const char dcbx[] = LLDP_TLV_ORG_DCBX;
+	const char bgp[] = LLDP_TLV_ORG_BGP;
 	unsigned char orgid[3];
 	int length, gotend = 0, ttl_received = 0;
 	int tlv_size, tlv_type, tlv_subtype, tlv_count = 0;
@@ -1242,6 +1389,171 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa
 				    "unsupported DCBX tlv received on %s - ignore",
 				    hardware->h_ifname);
 				unrecognized = 1;
+			} else if (memcmp(bgp, orgid, sizeof(orgid)) == 0 &&
+			    tlv_subtype == LLDP_TLV_BGP_PEER) {
+				/* BGP Peer Discovery TLV */
+				int remaining = tlv_size - 4;
+				while (remaining >= 2) {
+					u_int8_t st_type = PEEK_UINT8;
+					u_int8_t st_len = PEEK_UINT8;
+					remaining -= 2;
+					if (st_len > remaining) break;
+					switch (st_type) {
+					case LLDP_BGP_SUBTLV_ROUTER_ID:
+						if (st_len == 4) {
+							struct in_addr a;
+							char buf[INET_ADDRSTRLEN];
+							PEEK_BYTES(&a, 4);
+							if (inet_ntop(AF_INET, &a,
+								buf,
+								sizeof(buf))) {
+								free(port->p_bgp_router_id);
+								port->p_bgp_router_id =
+								    strdup(buf);
+							}
+						} else
+							PEEK_DISCARD(st_len);
+						break;
+					case LLDP_BGP_SUBTLV_AS_NUMBER:
+						if (st_len == 4)
+							port->p_bgp_as =
+							    PEEK_UINT32;
+						else
+							PEEK_DISCARD(st_len);
+						break;
+					case LLDP_BGP_SUBTLV_PEERING_ADDR:
+						if (st_len >= 2) {
+							u_int8_t addr_af =
+							    PEEK_UINT8;
+							int acons = 1;
+							if (addr_af == 1 &&
+							    st_len >= 6) {
+								struct in_addr a;
+								char buf[INET_ADDRSTRLEN];
+								PEEK_BYTES(&a, 4);
+								acons += 4;
+								if (inet_ntop(AF_INET,
+									&a, buf,
+									sizeof(buf))) {
+									free(port->p_bgp_peering_addr);
+									port->p_bgp_peering_addr =
+									    strdup(buf);
+								}
+								if (st_len >
+								    acons) {
+									u_int8_t pc =
+									    PEEK_UINT8;
+									acons++;
+									char as[256] =
+									    "";
+									int i;
+									for (i = 0;
+									     i < pc &&
+									     acons + 3 <=
+										 st_len;
+									     i++) {
+										u_int16_t afi =
+										    PEEK_UINT16;
+										u_int8_t safi =
+										    PEEK_UINT8;
+										acons += 3;
+										const char *nm =
+										    lldp_bgp_afi_safi_name(
+											afi,
+											safi);
+										if (nm) {
+											if (as[0])
+												strncat(
+												    as,
+												    ",",
+												    sizeof(as) -
+													strlen(as) -
+													1);
+											strncat(
+											    as,
+											    nm,
+											    sizeof(as) -
+												strlen(as) -
+												1);
+										}
+									}
+									if (as[0]) {
+										free(port->p_bgp_afi_safi);
+										port->p_bgp_afi_safi =
+										    strdup(as);
+									}
+								}
+							} else if (addr_af == 2 &&
+							    st_len >= 18) {
+								struct in6_addr a;
+								char buf[INET6_ADDRSTRLEN];
+								PEEK_BYTES(&a, 16);
+								acons += 16;
+								if (inet_ntop(AF_INET6,
+									&a, buf,
+									sizeof(buf))) {
+									free(port->p_bgp_peering_addr);
+									port->p_bgp_peering_addr =
+									    strdup(buf);
+								}
+								if (st_len >
+								    acons) {
+									u_int8_t pc =
+									    PEEK_UINT8;
+									acons++;
+									char as[256] =
+									    "";
+									int i;
+									for (i = 0;
+									     i < pc &&
+									     acons + 3 <=
+										 st_len;
+									     i++) {
+										u_int16_t afi =
+										    PEEK_UINT16;
+										u_int8_t safi =
+										    PEEK_UINT8;
+										acons += 3;
+										const char *nm =
+										    lldp_bgp_afi_safi_name(
+											afi,
+											safi);
+										if (nm) {
+											if (as[0])
+												strncat(
+												    as,
+												    ",",
+												    sizeof(as) -
+													strlen(as) -
+													1);
+											strncat(
+											    as,
+											    nm,
+											    sizeof(as) -
+												strlen(as) -
+												1);
+										}
+									}
+									if (as[0]) {
+										free(port->p_bgp_afi_safi);
+										port->p_bgp_afi_safi =
+										    strdup(as);
+									}
+								}
+							} else
+								acons = 0;
+							PEEK_DISCARD(st_len -
+							    acons);
+						} else
+							PEEK_DISCARD(st_len);
+						break;
+					default:
+						PEEK_DISCARD(st_len);
+					}
+					remaining -= st_len;
+				}
+				if (remaining > 0)
+					PEEK_DISCARD(remaining);
 			} else {
 				log_debug("lldp",
 				    "unknown org tlv [%02x:%02x:%02x] received on %s",

@@ -675,6 +675,12 @@ _lldpctl_atom_get_str_port(lldpctl_atom_t *atom, lldpctl_key_t key)
 		return port->p_descr;
 	case lldpctl_k_port_vlan_advertise_pattern:
 		return port->p_vlan_advertise_pattern;
+	case lldpctl_k_port_bgp_router_id:
+		return port->p_bgp_router_id;
+	case lldpctl_k_port_bgp_peering_addr:
+		return port->p_bgp_peering_addr;
+	case lldpctl_k_port_bgp_afi_safi:
+		return port->p_bgp_afi_safi;
 #ifdef ENABLE_DOT3
 	case lldpctl_k_port_dot3_mautype:
 		return map_lookup(operational_mau_type_values, port->p_macphy.mau_type);
@@ -811,6 +817,8 @@ _lldpctl_atom_get_int_port(lldpctl_atom_t *atom, lldpctl_key_t key)
 		return port->p_hidden_in;
 	case lldpctl_k_port_vlan_tx:
 		return port->p_vlan_tx_enabled ? port->p_vlan_tx_tag : -1;
+	case lldpctl_k_port_bgp_as:
+		return (long int)port->p_bgp_as;
 #ifdef ENABLE_DOT3
 	case lldpctl_k_port_dot3_mfs:
 		if (port->p_mfs > 0) return port->p_mfs;

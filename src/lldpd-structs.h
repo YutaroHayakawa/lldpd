@@ -299,6 +299,10 @@ struct lldpd_port {
 #ifdef ENABLE_CUSTOM
 	TAILQ_HEAD(, lldpd_custom) p_custom_list;
 #endif
+	char *p_bgp_router_id;    /* BGP Router ID from remote */
+	u_int32_t p_bgp_as;       /* BGP AS number from remote */
+	char *p_bgp_peering_addr; /* BGP peering address from remote */
+	char *p_bgp_afi_safi;     /* BGP AFI/SAFI pairs from remote */
 };
 MARSHAL_BEGIN(lldpd_port)
 MARSHAL_TQE(lldpd_port, p_entries)
@@ -320,6 +324,9 @@ MARSHAL_SUBTQ(lldpd_port, lldpd_pi, p_pids)
 #ifdef ENABLE_CUSTOM
 MARSHAL_SUBTQ(lldpd_port, lldpd_custom, p_custom_list)
 #endif
+MARSHAL_STR(lldpd_port, p_bgp_router_id)
+MARSHAL_STR(lldpd_port, p_bgp_peering_addr)
+MARSHAL_STR(lldpd_port, p_bgp_afi_safi)
 MARSHAL_END(lldpd_port);
 
 /* Used to modify some port related settings */
@@ -423,6 +430,10 @@ struct lldpd_config {
 	int c_lldp_portid_type;	       /* The PortID type */
 	int c_lldp_agent_type;	       /* The agent type */
 	int c_lldp_portdescr_type;	      /* The port description source type */
+	char *c_bgp_router_id;    /* BGP Router ID to advertise */
+	u_int32_t c_bgp_as;       /* BGP AS number to advertise (0 = not set) */
+	char *c_bgp_peering_addr; /* BGP peering address to advertise */
+	char *c_bgp_afi_safi;     /* BGP AFI/SAFI pairs (comma-separated) */
 };
 MARSHAL_BEGIN(lldpd_config)
 MARSHAL_STR(lldpd_config, c_mgmt_pattern)
@@ -433,6 +444,9 @@ MARSHAL_STR(lldpd_config, c_perm_ifaces)
 MARSHAL_STR(lldpd_config, c_hostname)
 MARSHAL_STR(lldpd_config, c_platform)
 MARSHAL_STR(lldpd_config, c_description)
+MARSHAL_STR(lldpd_config, c_bgp_router_id)
+MARSHAL_STR(lldpd_config, c_bgp_peering_addr)
+MARSHAL_STR(lldpd_config, c_bgp_afi_safi)
 MARSHAL_END(lldpd_config);
 
 struct lldpd_frame {

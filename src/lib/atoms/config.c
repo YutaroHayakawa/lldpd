@@ -126,6 +126,15 @@ _lldpctl_atom_get_str_config(lldpctl_atom_t *atom, lldpctl_key_t key)
 		return map_lookup(lldp_agent_map.map, c->config->c_lldp_agent_type);
 	case lldpctl_k_config_lldp_portdescr_type:
 		return map_lookup(lldp_portdescr_map.map, c->config->c_lldp_portdescr_type);
+	case lldpctl_k_config_bgp_router_id:
+		res = c->config->c_bgp_router_id;
+		break;
+	case lldpctl_k_config_bgp_peering_addr:
+		res = c->config->c_bgp_peering_addr;
+		break;
+	case lldpctl_k_config_bgp_afi_safi:
+		res = c->config->c_bgp_afi_safi;
+		break;
 	default:
 		SET_ERROR(atom->conn, LLDPCTL_ERR_NOT_EXIST);
 		return NULL;
@@ -198,6 +207,21 @@ _lldpctl_atom_set_str_config(lldpctl_atom_t *atom, lldpctl_key_t key, const char
 			&c->config->c_hostname, value))
 			return NULL;
 		break;
+	case lldpctl_k_config_bgp_router_id:
+		if (!__lldpctl_atom_set_str_config(c, &config.c_bgp_router_id,
+			&c->config->c_bgp_router_id, value))
+			return NULL;
+		break;
+	case lldpctl_k_config_bgp_peering_addr:
+		if (!__lldpctl_atom_set_str_config(c, &config.c_bgp_peering_addr,
+			&c->config->c_bgp_peering_addr, value))
+			return NULL;
+		break;
+	case lldpctl_k_config_bgp_afi_safi:
+		if (!__lldpctl_atom_set_str_config(c, &config.c_bgp_afi_safi,
+			&c->config->c_bgp_afi_safi, value))
+			return NULL;
+		break;
 	default:
 		SET_ERROR(atom->conn, LLDPCTL_ERR_NOT_EXIST);
 		return NULL;
@@ -257,6 +281,8 @@ _lldpctl_atom_get_int_config(lldpctl_atom_t *atom, lldpctl_key_t key)
 		return c->config->c_max_neighbors;
 	case lldpctl_k_config_lldp_portid_type:
 		return c->config->c_lldp_portid_type;
+	case lldpctl_k_config_bgp_as:
+		return (long int)c->config->c_bgp_as;
 	default:
 		return SET_ERROR(atom->conn, LLDPCTL_ERR_NOT_EXIST);
 	}
@@ -329,6 +355,10 @@ _lldpctl_atom_set_int_config(lldpctl_atom_t *atom, lldpctl_key_t key, long int v
 	case lldpctl_k_config_lldp_portdescr_type:
 		config.c_lldp_portdescr_type = value;
 		c->config->c_lldp_portdescr_type = value;
+		break;
+	case lldpctl_k_config_bgp_as:
+		config.c_bgp_as = (u_int32_t)value;
+		c->config->c_bgp_as = (u_int32_t)value;
 		break;
 	default:
 		SET_ERROR(atom->conn, LLDPCTL_ERR_NOT_EXIST);

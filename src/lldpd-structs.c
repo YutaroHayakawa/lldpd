@@ -216,6 +216,12 @@ lldpd_port_cleanup(struct lldpd_port *port, int all)
 #ifdef ENABLE_CUSTOM
 		lldpd_custom_list_cleanup(port);
 #endif
+		free(port->p_bgp_router_id);
+		port->p_bgp_router_id = NULL;
+		free(port->p_bgp_peering_addr);
+		port->p_bgp_peering_addr = NULL;
+		free(port->p_bgp_afi_safi);
+		port->p_bgp_afi_safi = NULL;
 	}
 }
 
@@ -231,4 +237,7 @@ lldpd_config_cleanup(struct lldpd_config *config)
 	free(config->c_hostname);
 	free(config->c_platform);
 	free(config->c_description);
+	free(config->c_bgp_router_id);
+	free(config->c_bgp_peering_addr);
+	free(config->c_bgp_afi_safi);
 }
